@@ -79,9 +79,8 @@
     .tf-debug-toggle{ position:Fixed; right:12px; bottom:12px; z-index:20010; background:#222; color:#fff; border-radius:20px; padding:6px 10px; font-size:12px; display:none; cursor:pointer; }
     .player-overlay { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end; padding:12px; gap:8px; pointer-events:none; align-items:stretch; }
     .big-play { position:absolute; left:50%; top:42%; transform:translate(-50%,-50%); z-index:8; background:rgba(0,0,0,0.45); border-radius:50%; width:84px; height:84px; display:flex; align-items:center; justify-content:center; font-size:30px; color:#fff; cursor:pointer; pointer-events:auto; }
-    .control-row { display:flex; align-items:center; gap:8px; pointer-events:auto; justify-content:center; }
+    .control-row { display:flex; align-items:center; gap:8px; pointer-events:auto; justify-content:flex-start; }
     .control-btn { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.04); padding:8px 10px; border-radius:8px; color:#fff; cursor:pointer; }
-    .control-row.centered-absolute { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:9; }
     .progress-row { width:100%; pointer-events:auto; display:flex; align-items:center; gap:8px; }
     .seek { flex:1; height:8px; background:rgba(255,255,255,0.06); border-radius:999px; position:relative; overflow:hidden; touch-action:none; -ms-touch-action:none; }
     .seek .fill { position:absolute; left:0; top:0; height:100%; width:0; background:linear-gradient(90deg,#fff,#aaa); border-radius:999px; }
@@ -108,10 +107,6 @@
     .tf-landscape-full { position:fixed; inset:0; background:#000; display:flex; justify-content:center; align-items:center; z-index:2147483646; }
     .tf-landscape-full .inner { width:100%; height:100%; display:flex; justify-content:center; align-items:center; overflow:hidden; position:relative; }
     .tf-landscape-full .inner video { width:100%; height:auto; max-height:100%; object-fit:contain; }
-    /* Fallback rotate when orientation.lock not available (iOS/desktop) */
-    .tf-landscape-full.force-rotate { transform-origin:center center; }
-    .tf-landscape-full.force-rotate .inner { width:100vh; height:100vw; transform:rotate(90deg); display:flex; justify-content:center; align-items:center; }
-    .tf-landscape-full.force-rotate .inner video { width:100vh; height:auto; max-height:none; transform:rotate(0deg); }
   </style>
 </head>
 <body>
@@ -224,17 +219,6 @@ function isControlElement(el){
   return !!(el.closest && (el.closest('.control-btn') || el.closest('.seek') || el.closest('.thumb') || el.closest('.big-play')));
 }
 
-/* Small SVG play/pause icon generator */
-function svgPlayPause(isPaused){
-  if(isPaused){
-    // Play icon (triangle)
-    return `<svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="white" d="M8 5v14l11-7z"/></svg>`;
-  } else {
-    // Pause icon (two rects)
-    return `<svg width="36" height="36" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="white"></rect><rect x="14" y="5" width="4" height="14" rx="1" fill="white"></rect></svg>`;
-  }
-}
-
 function attachCustomControls(video, container){
   if(!video || !container) return;
   if(container._customAttached) return;
@@ -246,11 +230,12 @@ function attachCustomControls(video, container){
   const overlay = document.createElement('div');
   overlay.className = 'player-overlay';
   overlay.style.pointerEvents = 'none';
-  overlay.style.display = 'none'; // start hidden
+  overlay.style.display = 'none';
   overlay.style.flexDirection = 'column';
   overlay.style.justifyContent = 'flex-end';
   overlay.style.alignItems = 'stretch';
   overlay._visible = false;
+
   function setOverlayVisible(v){
     overlay._visible = !!v;
     overlay.style.display = overlay._visible ? 'flex' : 'none';
@@ -260,27 +245,8 @@ function attachCustomControls(video, container){
   const big = document.createElement('div');
   big.className = 'big-play';
   big.style.pointerEvents = 'auto';
-  big.innerHTML = svgPlayPause(video.paused);
+  big.textContent = video.paused ? '▶' : '❚❚';
   overlay.appendChild(big);
-
-  // add centered control row (always centered regardless of video width)
-  const centerControls = document.createElement('div');
-  centerControls.className = 'control-row centered-absolute';
-  centerControls.style.pointerEvents = 'auto';
-  const backBtn = document.createElement('button');
-  backBtn.className = 'control-btn';
-  backBtn.textContent = '-10';
-  const playBtn = document.createElement('button');
-  playBtn.className = 'control-btn';
-  playBtn.style.minWidth = '56px';
-  playBtn.innerHTML = svgPlayPause(video.paused);
-  const fwdBtn = document.createElement('button');
-  fwdBtn.className = 'control-btn';
-  fwdBtn.textContent = '+10';
-  centerControls.appendChild(backBtn);
-  centerControls.appendChild(playBtn);
-  centerControls.appendChild(fwdBtn);
-  overlay.appendChild(centerControls);
 
   const progressRow = document.createElement('div');
   progressRow.className = 'progress-row';
@@ -318,7 +284,6 @@ function attachCustomControls(video, container){
   container.style.position = container.style.position || 'relative';
   container.appendChild(overlay);
 
-  // prevent container toggling when clicking overlay controls
   overlay.addEventListener('click', function(ev){ ev.stopPropagation(); }, {passive:true});
 
   function fmt(s){ s=Math.floor(s||0); const m=Math.floor(s/60); const sec=s%60; return m+':'+String(sec).padStart(2,'0'); }
@@ -330,8 +295,7 @@ function attachCustomControls(video, container){
     const pct = dur > 0 ? (cur / dur) * 100 : 0;
     fill.style.width = pct + '%';
     thumb.style.left = pct + '%';
-    big.innerHTML = svgPlayPause(video.paused);
-    playBtn.innerHTML = svgPlayPause(video.paused);
+    big.textContent = video.paused ? '▶' : '❚❚';
   }
   video.addEventListener('loadedmetadata', ()=>{ updateUI(); });
   video.addEventListener('timeupdate', ()=>{ updateUI(); });
@@ -339,10 +303,6 @@ function attachCustomControls(video, container){
   video.addEventListener('pause', ()=>{ updateUI(); });
 
   big.addEventListener('click', function(ev){ ev.stopPropagation(); try{ if(video.paused) video.play().catch(()=>{}); else video.pause(); }catch(e){} updateUI(); }, {passive:true});
-  playBtn.addEventListener('click', function(ev){ ev.stopPropagation(); try{ if(video.paused) video.play().catch(()=>{}); else video.pause(); }catch(e){} updateUI(); }, {passive:true});
-  backBtn.addEventListener('click', function(ev){ ev.stopPropagation(); try{ video.currentTime = Math.max(0, (video.currentTime||0) - 10); }catch(e){} updateUI(); }, {passive:true});
-  fwdBtn.addEventListener('click', function(ev){ ev.stopPropagation(); try{ video.currentTime = Math.min((video.duration||0), (video.currentTime||0) + 10); }catch(e){} updateUI(); }, {passive:true});
-
   seek.addEventListener('click', function(ev){ ev.stopPropagation(); const r = seek.getBoundingClientRect(); const p = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width)); try{ video.currentTime = p * (video.duration || 0); }catch(e){} updateUI(); }, {passive:true});
   let dragging = false;
   function onPointerDown(ev){ ev.preventDefault(); ev.stopPropagation(); dragging=true; const r = seek.getBoundingClientRect(); const x = Math.max(r.left, Math.min(r.right, ev.clientX)); const p = (x - r.left) / r.width; try{ video.currentTime = p * (video.duration || 0); }catch(e){} updateUI(); }
@@ -426,22 +386,22 @@ function attachCustomControls(video, container){
       controlRow.className = 'control-row';
       controlRow.style.pointerEvents = 'auto';
       controlRow.style.justifyContent = 'center';
-      const backBtnL = document.createElement('button');
-      backBtnL.className = 'control-btn';
-      backBtnL.textContent = '-10';
-      backBtnL.setAttribute('aria-label','Reculer 10 secondes');
-      const playBtnL = document.createElement('button');
-      playBtnL.className = 'control-btn';
-      playBtnL.innerHTML = svgPlayPause(newV.paused);
-      playBtnL.setAttribute('aria-label','Play/Pause');
-      playBtnL.style.minWidth = '56px';
-      const fwdBtnL = document.createElement('button');
-      fwdBtnL.className = 'control-btn';
-      fwdBtnL.textContent = '+10';
-      fwdBtnL.setAttribute('aria-label','Avancer 10 secondes');
-      controlRow.appendChild(backBtnL);
-      controlRow.appendChild(playBtnL);
-      controlRow.appendChild(fwdBtnL);
+      const backBtn = document.createElement('button');
+      backBtn.className = 'control-btn';
+      backBtn.textContent = '-10';
+      backBtn.setAttribute('aria-label','Reculer 10 secondes');
+      const playBtn = document.createElement('button');
+      playBtn.className = 'control-btn';
+      playBtn.textContent = newV.paused ? '▶' : '❚❚';
+      playBtn.setAttribute('aria-label','Play/Pause');
+      playBtn.style.minWidth = '56px';
+      const fwdBtn = document.createElement('button');
+      fwdBtn.className = 'control-btn';
+      fwdBtn.textContent = '+10';
+      fwdBtn.setAttribute('aria-label','Avancer 10 secondes');
+      controlRow.appendChild(backBtn);
+      controlRow.appendChild(playBtn);
+      controlRow.appendChild(fwdBtn);
       landOverlay.appendChild(controlRow);
 
       const progRow = document.createElement('div');
@@ -459,24 +419,8 @@ function attachCustomControls(video, container){
       landOverlay.appendChild(progRow);
 
       document.body.appendChild(land);
-
-      // Try orientation lock; if not available, use CSS force-rotate fallback
-      let locked = false;
-      try{ 
-        if(screen.orientation && screen.orientation.lock){
-          screen.orientation.lock('landscape').then(()=>{ locked = true; }).catch(()=>{ locked = false; });
-        }
-      }catch(e){ locked = false; }
-
-      // If orientation lock isn't available after a short delay, apply CSS fallback rotate class
-      setTimeout(()=>{ 
-        if(!locked){
-          land.classList.add('force-rotate');
-        }
-      }, 120);
-
+      try{ if(screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); }catch(e){}
       try{ if(land.requestFullscreen) land.requestFullscreen({navigationUI:'hide'}).catch(()=>{}); else if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen({navigationUI:'hide'}).catch(()=>{}); }catch(e){}
-
       newV.currentTime = backupTime;
       try{ const p = newV.play(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
       function fmt2(s){ s=Math.floor(s||0); const m=Math.floor(s/60); const sec=s%60; return m+':'+String(sec).padStart(2,'0'); }
@@ -488,23 +432,20 @@ function attachCustomControls(video, container){
         const pct = dur > 0 ? (cur / dur) * 100 : 0;
         f.style.width = pct + '%';
         th.style.left = pct + '%';
-        playBtnL.innerHTML = svgPlayPause(newV.paused);
-        // also sync main video small UI if needed
+        playBtn.textContent = newV.paused ? '▶' : '❚❚';
       }
       newV.addEventListener('loadedmetadata', ()=>{ updateLandUI(); });
       newV.addEventListener('timeupdate', ()=>{ updateLandUI(); });
-      newV.addEventListener('play', ()=>{ updateLandUI(); });
-      newV.addEventListener('pause', ()=>{ updateLandUI(); });
 
-      playBtnL.addEventListener('click', function(ev){
+      playBtn.addEventListener('click', function(ev){
         ev.stopPropagation();
         try{ if(newV.paused) newV.play().catch(()=>{}); else newV.pause(); }catch(e){}
         updateLandUI();
       }, {passive:true});
-      backBtnL.addEventListener('click', function(ev){
+      backBtn.addEventListener('click', function(ev){
         ev.stopPropagation();
         try{ newV.currentTime = Math.max(0, (newV.currentTime||0) - 10); }catch(e){} updateLandUI(); }, {passive:true});
-      fwdBtnL.addEventListener('click', function(ev){
+      fwdBtn.addEventListener('click', function(ev){
         ev.stopPropagation();
         try{ newV.currentTime = Math.min((newV.duration||0), (newV.currentTime||0) + 10); }catch(e){} updateLandUI(); }, {passive:true});
 
@@ -538,6 +479,12 @@ function attachCustomControls(video, container){
       container._landOpen = true;
 
     }catch(err){ debugLog('fsBtn error', err); }
+  }, {passive:true});
+
+  video.addEventListener('click', function(e){
+    if(isControlElement(e.target)){ e.stopPropagation(); return; }
+    e.stopPropagation();
+    setOverlayVisible(!overlay._visible);
   }, {passive:true});
 }
 
@@ -588,26 +535,7 @@ function attachCustomControls(video, container){
     const big = document.createElement('div');
     big.className = 'big-play';
     big.style.pointerEvents = 'auto';
-    big.innerHTML = svgPlayPause(video.paused);
-
-    // center control row for explorer videos
-    const centerControls = document.createElement('div');
-    centerControls.className = 'control-row centered-absolute';
-    centerControls.style.pointerEvents = 'auto';
-    const backBtn = document.createElement('button');
-    backBtn.className = 'control-btn';
-    backBtn.textContent = '-10';
-    const playBtn = document.createElement('button');
-    playBtn.className = 'control-btn';
-    playBtn.style.minWidth = '56px';
-    playBtn.innerHTML = svgPlayPause(video.paused);
-    const fwdBtn = document.createElement('button');
-    fwdBtn.className = 'control-btn';
-    fwdBtn.textContent = '+10';
-    centerControls.appendChild(backBtn);
-    centerControls.appendChild(playBtn);
-    centerControls.appendChild(fwdBtn);
-
+    big.textContent = video.paused ? '▶' : '❚❚';
     const progressRow = document.createElement('div');
     progressRow.className = 'progress-row';
     progressRow.style.pointerEvents = 'auto';
@@ -631,7 +559,6 @@ function attachCustomControls(video, container){
     progressRow.appendChild(seek);
     progressRow.appendChild(timeRight);
     overlay.appendChild(big);
-    overlay.appendChild(centerControls);
     overlay.appendChild(progressRow);
     container.style.position = container.style.position || 'relative';
     container.appendChild(overlay);
@@ -648,8 +575,7 @@ function attachCustomControls(video, container){
       const pct = dur > 0 ? (cur / dur) * 100 : 0;
       fill.style.width = pct + '%';
       thumb.style.left = pct + '%';
-      big.innerHTML = svgPlayPause(video.paused);
-      playBtn.innerHTML = svgPlayPause(video.paused);
+      big.textContent = video.paused ? '▶' : '❚❚';
     }
     video.addEventListener('loadedmetadata', ()=>{ updateUI(); });
     video.addEventListener('timeupdate', ()=>{ updateUI(); });
@@ -662,10 +588,6 @@ function attachCustomControls(video, container){
         else video.pause();
       }catch(e){}
       updateUI();
-    }, {passive:true});
-    playBtn.addEventListener('click', function(ev){
-      ev.stopPropagation();
-      try{ if(video.paused) video.play().catch(()=>{}); else video.pause(); }catch(e){} updateUI();
     }, {passive:true});
     seek.addEventListener('click', function(ev){
       ev.stopPropagation();
@@ -713,6 +635,13 @@ function attachCustomControls(video, container){
       if (overlay.contains(e.target) || isControlElement(e.target)) {
         return;
       }
+      window.__explorerControls.forEach(o=>{ if(o.overlay && o.overlay !== overlay) { if(typeof o.setOverlayVisible === 'function') o.setOverlayVisible(false); else { o.overlay.style.display='none'; o.overlay.style.pointerEvents='none'; }}});
+      setTimeout(()=> setOverlayVisible(!overlay._visible), 0);
+    }, {passive:true});
+
+    video.addEventListener('click', function(e){
+      if(isControlElement(e.target)){ e.stopPropagation(); return; }
+      e.stopPropagation();
       window.__explorerControls.forEach(o=>{ if(o.overlay && o.overlay !== overlay) { if(typeof o.setOverlayVisible === 'function') o.setOverlayVisible(false); else { o.overlay.style.display='none'; o.overlay.style.pointerEvents='none'; }}});
       setTimeout(()=> setOverlayVisible(!overlay._visible), 0);
     }, {passive:true});
@@ -1110,4 +1039,4 @@ window.addEventListener('load', async ()=>{
 });
   </script>
 </body>
-</html>
+      </html>
